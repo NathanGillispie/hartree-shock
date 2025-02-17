@@ -6,6 +6,7 @@ See credits below for authors of `parse_gbs`. I made slight modifications
 
 __credits__ = ["https://github.com/theochem/gbasis"]
 __license__ = "GPL"
+__author__ = "Taewon David Kim, Leila Pujal, et. al."
 
 import re
 import numpy as np
@@ -107,7 +108,8 @@ def parse_gbs(gbs_basis_file):
 def parse_mol(filename):
     """Parse a file into coords as a dictionary using XYZ format.
     parse_mol(filename)
-    NOTE: comments will not be included
+    Comments are not included.
+    Written by Nathan Gillispie
     """
     atoms = []
     with open(filename, 'r') as mol_file:

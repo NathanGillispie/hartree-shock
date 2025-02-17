@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """
 File to compute nuclear repulsion, overlap, kinetic, and nuclear attraction integrals.
+Uses the gbasis library which uses libcint as the integral computer.
 """
 import numpy as np
-from math import erf
-#dtype = numpy.complex128
-
-Z = {}
+from gbasis.parsers import make_contractions, parse_gbs
+from gbasis.integrals.libcint import ELEMENTS, LIBCINT, CBasis
 
 def nuclear_repulsion(mol):
     natom = len(mol)
@@ -19,48 +18,26 @@ def nuclear_repulsion(mol):
             energy += mol[i][0]*mol[j][0]/dist
     return energy
 
-def kinetic_energy(mol, basis):
-    pass
+class integrals:
+    def __init__(self, molecule, basis):
+        self.molecule = molecule
+        self.basis = basis
+        natoms = len(molecule)
+        Z = [molecule[a][0] for a in range(natoms)]
+        atnums = np.asarray(Z, dtype=float)
+        atsyms = [ELEMENTS[atom] for atom in Z]
+        atcoords = np.asarray([molecule[a][1] for a in range(natoms)])
+        py_basis = make_contractions(basis, atsyms, atcoords, coord_types="cartesian")
+        self.lc_basis = CBasis(py_basis, atsyms, atcoords, coord_type="cartesian")
 
-def S_overlap(molecule, basis):
-    nbf = len(basis)
-    overlap_mat = np.zeros((nbf, nbf))
+    def overlap(self):
+        return self.lc_basis.overlap_integral()
+    def kinetic_energy(self):
+        return self.lc_basis.kinetic_energy_integral()
+    def nuclear_attraction(self):
+        return self.lc_basis.nuclear_attraction_integral()
+    def momentum(self):
+        return self.lc_basis.momentum_integral(origin=np.zeros(3))
+    def electron_repulsion(self):
+        return self.lc_basis.electron_repulsion_integral()
 
-    coeffs, alphas, angs, basis_to_atom = [], [], [], []
-    for b in basis:
-        coeffs.append(b[2])
-        alphas.append(b[1])
-        angs.append(b[0])
-    coeffs = np.array(coeffs)
-    alphas = np.array(alphas)
-
-    for i, a in enumerate(molecule):
-        # a[0] is atom Z, a[2] is num_basis
-        basis_to_atom += [i]*a[2]
-
-    for i in range(nbf):
-        a1 = alphas[i]
-        c1 = coeffs[i]
-        l1 = angs[i]
-        atom1_pos = molecule[basis_to_atom[i]][1]
-        for j in range(i, nbf):
-            c2 = coeffs[j]
-            a2 = alphas[j]
-            l2 = angs[j]
-            atom2_pos = molecule[basis_to_atom[j]][1]
-
-            dist = np.sqrt(np.sum((atom2_pos-atom1_pos)**2))
-
-            # assume len(coeffs) == len(alphas)
-            for prim in range(c1.shape[0]):
-                
-
-            overlap_mat[i,j] = 0
-
-def nuclear_attraction(mol, basis):
-    pass
-
-if __name__ == "__main__":
-    import hf
-    molecule, basis = hf.build_molecule('basis/sto-3g.gbs', 'tests/molecules/water.xyz')
-    S_overlap(molecule, basis)
