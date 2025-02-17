@@ -39,5 +39,5 @@ class integrals:
     def momentum(self):
         return self.lc_basis.momentum_integral(origin=np.zeros(3))
     def electron_repulsion(self):
-        return self.lc_basis.electron_repulsion_integral()
+        return self.lc_basis.electron_repulsion_integral(notation="chemist")
 
