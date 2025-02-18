@@ -7,26 +7,29 @@ import numpy as np
 from gbasis.parsers import make_contractions, parse_gbs
 from gbasis.integrals.libcint import ELEMENTS, LIBCINT, CBasis
 
-def nuclear_repulsion(mol):
-    natom = len(mol)
+def nuclear_repulsion(molecule):
+    natom = len(molecule)
     energy = 0
+    Z, coords = zip(*molecule)
     for i in range(natom):
-        atom1_pos = mol[i][1]
+        atom1_pos = coords[i]
         for j in range(i+1, natom):
-            atom2_pos = mol[j][1]
+            atom2_pos = coords[j]
             dist = np.sqrt(np.sum((atom2_pos-atom1_pos)**2))
-            energy += mol[i][0]*mol[j][0]/dist
+            energy += Z[i]*Z[j]/dist
     return energy
 
 class integrals:
     def __init__(self, molecule, basis):
         self.molecule = molecule
         self.basis = basis
+
         natoms = len(molecule)
-        Z = [molecule[a][0] for a in range(natoms)]
+        Z, coords = zip(*molecule)
+        atcoords = np.asarray(coords, dtype=float)
         atnums = np.asarray(Z, dtype=float)
         atsyms = [ELEMENTS[atom] for atom in Z]
-        atcoords = np.asarray([molecule[a][1] for a in range(natoms)])
+
         py_basis = make_contractions(basis, atsyms, atcoords, coord_types="cartesian")
         self.lc_basis = CBasis(py_basis, atsyms, atcoords, coord_type="cartesian")
 
@@ -40,4 +43,11 @@ class integrals:
         return self.lc_basis.momentum_integral(origin=np.zeros(3))
     def electron_repulsion(self):
         return self.lc_basis.electron_repulsion_integral(notation="chemist")
+    
+
+    def nbf(self):
+        return self.lc_basis.nbfn
+    def nshells(self):
+        return self.lc_basis.nbas
+
 
