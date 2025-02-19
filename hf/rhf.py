@@ -67,22 +67,22 @@ class RHF:
         ovlp, E_nuc, kinetic, nuc_attr, eri = self.ints
         H_core = nuc_attr + kinetic
 
-
         # Orthogonalization matrix
         Lambda_S, L_S = np.linalg.eigh(ovlp)
         S_inv = L_S @ np.diag(1/np.sqrt(Lambda_S)) @ np.transpose(L_S)
 
         # Initial fock matrix and MO coefficients
-        F_0 = np.transpose(S_inv) @ H_core @ S_inv
+        F_0A = H_core # Use the core guess
+        F_0 = S_inv.T @ F_0A @ S_inv
         epsilon_0, C_0 = np.linalg.eigh(F_0)
-        C_0 = (S_inv @ C_0).real
+        C_0 = (S_inv @ C_0).real # Back-transform
 
         # Initial density
         D_0 = np.einsum("mk,nk->mn",C_0[:,:self.occ],C_0[:,:self.occ],optimize=True)
 
         # Initial energy
-        E_elec = np.einsum("mn,mn",D_0,(F_0 + F_0))
-        E_elec = np.trace(D_0 @ F_0)*2
+        E_elec = np.trace(D_0 @ (F_0A + H_core))
+        print("\nE_elec: %.7f\n"%E_elec)
         E_tot = E_elec + E_nuc
 
         #print("Initial orbital energies: %sEh"%np.array2string(epsilon_0,precision=3,max_line_width=150,suppress_small=True,separator=''))
@@ -97,18 +97,22 @@ class RHF:
             start = perf_counter()
             iteration += 1
 
-            # Compute new Fock by minimizing electronic repulsion
-            tmp = 2.*eri - eri.transpose((0,2,1,3))
-            # Using PREVIOUS density
-            F_MO = np.einsum("ls,mnls->mn",D,tmp, optimize=True) + H_core
+            # Using PREVIOUS density: H = T + V + 2J - K
+            JK = np.einsum("ls,mnls->mn",
+                           D,
+                           2*eri - eri.transpose((0,2,1,3)),
+                           optimize=True)
+
+            F_MO = JK + H_core
+
             F = S_inv.T @ F_MO @ S_inv          # Orthogonalize fock
-            epsilon, C_MO = np.linalg.eigh(F)   # Diagonalize fock
-            C = (S_inv @ C_MO).real                    # Back transform
+            _, C_MO = np.linalg.eigh(F)         # Diagonalize fock
+            C = (S_inv @ C_MO).real             # Back transform
 
             # Compute new density
             D = np.einsum("mk,nk->mn",C[:,:self.occ],C[:,:self.occ],optimize=True)
 
-            E_elec = np.trace(D @ (F + F_0))
+            E_elec = np.trace(D @ (F_MO + H_core))
 
             delta_E = abs(E_elec + E_nuc - E_tot)
             E_tot = E_elec + E_nuc # Previous iteration's Etot above
@@ -121,8 +125,7 @@ class RHF:
 
             print("Iter%3d: %.6f Eh  %.3fms  ΔE=%.6f"%(iteration, E_tot, 1000*(perf_counter()-start),delta_E))
             if (iteration > 200):
-                print("SCF did not converge")
-                raise SystemExit(1)
+                exit("SCF did not converge")
 
         print("\nFinal RHF energy: %.9f"%E_tot)
 

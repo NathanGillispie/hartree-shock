@@ -60,11 +60,11 @@ if __name__ == "__main__":
     molecule, basis = build_molecule(result.mol, result.basis)
 
     wfn = RHF(molecule, basis)
-    # E, C = wfn.compute_E()
-    C = wfn.C
-    HOMO = wfn.HOMO # in AO basis
+    E, C = wfn.compute_E()
+    # C = wfn.C
+    # HOMO = wfn.HOMO # in AO basis
 
-    grid_from_molecule(molecule, basis)
+    # grid_from_molecule(molecule, basis)
     # TODO: get points from grid
     # evaluate_basis(basis, points, transform=C.T)
 

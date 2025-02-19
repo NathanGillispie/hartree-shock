@@ -72,12 +72,15 @@ def grid_from_molecule(molecule, ao_basis, transform=None, spacing=0.2, extensio
 
     shape = np.array(np.ceil((max - min + 2.0 * extension) / spacing), int)
     origin = np.dot((-0.5 * shape), axes)
+    dim = 3 #origin.shape
     # origin axes shape weight="trapezoid"
 
-    
-
+    points = np.vstack(np.meshgrid(
+                shape[0],
+                shape[1],
+                shape[2],
+                indexing="ij")).reshape(3, -1).T
     return points
-
 
 def write_cube(filename, data, atcoords):
     with open(filename, 'w') as f:
