@@ -23,7 +23,7 @@ def test_build_molecule(molecule, basis):
 
 @pytest.mark.parametrize("molecule", TEST_MOLECULES)
 @pytest.mark.parametrize("basis", TEST_BASIS)
-def test_grals(molecule, basis):
+def test_integrals(molecule, basis):
     m, b = build_molecule(molecule, basis)
     mints =integrals(m,b)
 

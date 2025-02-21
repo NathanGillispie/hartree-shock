@@ -12,19 +12,24 @@ import numpy as np
 from gbasis.parsers import parse_gbs
 from gbasis.evals.eval import evaluate_basis
 
-from utils import parse_mol, grid_from_molecule
+from utils import parse_mol, molecular_grid, np2mathematica
 import ints
 import constants
 from rhf import RHF
 
-def build_molecule(mol_file, basis_file):
+def build_molecule(mol_file, basis_file, **kwargs):
     r"""Initialize within a module. Returns tuple of molecule and basis. 
     Molecule is a list, each element is a tuple of (atomic_number, coord, basis_info)
     >>> build_molecule(Gaussian98_file, XYZ_file)
     (molecule, basis)
     """
+    a_u = True
+    if ("atomic_units" in kwargs.keys()):
+        a_u = kwargs["atomic_units"]
+
     basis = parse_gbs(basis_file)
-    mol = parse_mol(mol_file)
+    mol = parse_mol(mol_file, atomic_units=a_u)
+
     if (basis=={}):
         exit("Basis file empty...\n❌GAME OVER❌\nTotal score: 0 Hartrees")
     if (mol==[]):
@@ -54,19 +59,27 @@ def parse():
                         default='tests/molecules/water.xyz')
     return parser.parse_args()
 
-
 if __name__ == "__main__":
     result = parse()
     molecule, basis = build_molecule(result.mol, result.basis)
 
     wfn = RHF(molecule, basis)
     E, C = wfn.compute_E()
-    # C = wfn.C
-    # HOMO = wfn.HOMO # in AO basis
+    HOMO = wfn.occ
+    AO2MO = wfn.S_inv
 
-    # grid_from_molecule(molecule, basis)
-    # TODO: get points from grid
-    # evaluate_basis(basis, points, transform=C.T)
+    grid = molecular_grid(wfn, spacing=.1, extension=3)
+    grid.write_cube("h2o.cube")
+
+    # X, Y, Z = grid.grid_eval_x(HOMO)
+    # X, Y = np.meshgrid(X,Y)
+    #
+    # import matplotlib.pyplot as plt
+    
+    # plt.figure(figsize=(8,8))
+    # plt.axis('equal')
+    # cs = plt.contourf(X,Y,Z,extend='both',cmap='bwr')
+    # plt.show()
 
 
 
