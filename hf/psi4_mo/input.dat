@@ -1,0 +1,21 @@
+
+molecule {
+0 1
+	O    0.000000000000  -0.143225816552   0.000000000000
+	H    1.638036840407   1.136548822547  -0.000000000000
+	H    -1.638036840407   1.136548822547  -0.000000000000
+symmetry c1
+units bohr
+}
+
+set {
+  basis sto-3g
+  reference rhf
+}
+
+h_energy, wfn = energy('scf', return_wfn=True)
+print("rhf energy = %f" % h_energy)
+
+# These options are important (some aren't accessible from molden function)
+wfn.write_molden("psi4_h2o.molden", do_virtual=True, use_natural=False)
+

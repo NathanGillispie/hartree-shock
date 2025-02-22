@@ -10,10 +10,8 @@ __author__ = "Nathan Gillispie"
 
 import numpy as np
 from gbasis.parsers import parse_gbs
-from gbasis.evals.eval import evaluate_basis
 
 from utils import parse_mol, molecular_grid, np2mathematica
-import ints
 import constants
 from rhf import RHF
 
@@ -68,8 +66,9 @@ if __name__ == "__main__":
     HOMO = wfn.occ
     AO2MO = wfn.S_inv
 
-    grid = molecular_grid(wfn, spacing=.1, extension=3)
-    grid.write_cube("h2o.cube")
+    wfn.write_molden("h2o.molden")
+
+    # grid = molecular_grid(wfn, spacing=.1, extension=3)
 
     # X, Y, Z = grid.grid_eval_x(HOMO)
     # X, Y = np.meshgrid(X,Y)

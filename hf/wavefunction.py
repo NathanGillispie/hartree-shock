@@ -40,20 +40,19 @@ class wavefunction:
         # Initial fock matrix and MO coefficients using core guess
         # Core guess means F_0' = H_core
         F_0 = np.transpose(S_inv) @ H_core @ S_inv
-        _, C_0 = np.linalg.eigh(F_0)
-        C_0 = S_inv @ C_0
+        self.MO_energies, self.C_MO = np.linalg.eigh(F_0)
+        C_0 = S_inv @ self.C_MO
 
         # Initial density
-        self.D_0 = np.einsum("mk,nk->mn",C_0[:,:self.occ],C_0[:,:self.occ],optimize=True)
+        self.D = np.einsum("mk,nk->mn",C_0[:,:self.occ],C_0[:,:self.occ],optimize=True)
 
         print("Initializing SCF took %.3fms"%(1000*(perf_counter() - start)))
-        
+
         # Set initial C
         self.C = C_0
         self.S_inv = S_inv
         self.HOMO = self.C.T[self.occ-1]
         self.LUMO = self.C.T[self.occ]
-
 
     def occupied_orbitals(self):
         """Returns number of occupied oribitals"""
@@ -71,5 +70,5 @@ class wavefunction:
             exit("No LUMO orbital, choose a large basis set")
         return occ
 
-    # def compute_E():
-    #     raise NotImplementedError()
+        f.close()
+
