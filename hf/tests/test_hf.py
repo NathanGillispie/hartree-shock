@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import pytest
 
 from hf import build_molecule

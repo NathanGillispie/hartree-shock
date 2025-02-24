@@ -5,7 +5,12 @@ Uses the gbasis library which uses libcint as the integral computer.
 """
 import numpy as np
 from gbasis.parsers import make_contractions, parse_gbs
-from gbasis.integrals.libcint import ELEMENTS, LIBCINT, CBasis
+from gbasis.integrals.libcint import ELEMENTS, CBasis
+
+from gbasis.integrals.overlap import overlap_integral
+from gbasis.integrals.kinetic_energy import KineticEnergyIntegral
+import gbasis.integrals.nuclear_electron_attraction as nuc_attr
+from gbasis.integrals.electron_repulsion import ElectronRepulsionIntegral
 
 def nuclear_repulsion(molecule):
     natom = len(molecule)
@@ -20,9 +25,10 @@ def nuclear_repulsion(molecule):
     return energy
 
 class integrals:
-    def __init__(self, molecule, basis):
+    def __init__(self, molecule, basis, use_libcint=False):
         self.molecule = molecule
         self.basis = basis
+        self.use_libcint = use_libcint
 
         natoms = len(molecule)
         Z, coords = zip(*molecule)
@@ -30,24 +36,43 @@ class integrals:
         atnums = np.asarray(Z, dtype=float)
         atsyms = [ELEMENTS[atom] for atom in Z]
 
-        py_basis = make_contractions(basis, atsyms, atcoords, coord_types="cartesian")
-        self.lc_basis = CBasis(py_basis, atsyms, atcoords, coord_type="cartesian")
+        self.shells = make_contractions(basis, atsyms, atcoords, coord_types="cartesian")
+        self.lc_basis = None
+        self.lc_basis = CBasis(self.shells, atsyms, atcoords, coord_type="cartesian")
+        if use_libcint:
+            self.lc_basis = CBasis(self.shells, atsyms, atcoords, coord_type="cartesian")
+        else:
+            self.nuclear_coords = atcoords
+            self.nuclear_charges = np.asarray(Z)
 
     def overlap(self):
-        return self.lc_basis.overlap_integral()
+        if self.use_libcint:
+            return self.lc_basis.overlap_integral()
+        else:
+            return overlap_integral(self.shells)
     def kinetic_energy(self):
-        return self.lc_basis.kinetic_energy_integral()
+        if self.use_libcint:
+            return self.lc_basis.kinetic_energy_integral()
+        else:
+            kinetic = KineticEnergyIntegral(self.shells)
+            return kinetic.construct_array_cartesian()
     def nuclear_attraction(self):
-        return self.lc_basis.nuclear_attraction_integral()
-    def momentum(self):
-        return self.lc_basis.momentum_integral(origin=np.zeros(3))
+        if self.use_libcint:
+            return self.lc_basis.nuclear_attraction_integral()
+        else:
+            return nuc_attr.nuclear_electron_attraction_integral(
+                    self.shells, self.nuclear_coords, self.nuclear_charges)
     def electron_repulsion(self):
-        return self.lc_basis.electron_repulsion_integral(notation="chemist")
+        if self.use_libcint:
+            return self.lc_basis.electron_repulsion_integral(notation="chemist")
+        else:
+            eri = ElectronRepulsionIntegral(self.shells)
+            return eri.construct_array_cartesian()
     
 
     def nbf(self):
         return self.lc_basis.nbfn
     def nshells(self):
-        return self.lc_basis.nbas
+        return len(self.shells)
 
 

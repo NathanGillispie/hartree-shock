@@ -1,13 +1,82 @@
 #!/usr/bin/env python
 
-__credits__ = ["https://github.com/theochem/gbasis"]
-__license__ = "GPL"
-__author__ = "Taewon David Kim, Leila Pujal, et. al."
-
 import numpy as np
 from gbasis.evals.eval import evaluate_basis
-from gbasis.parsers import make_contractions
 from gbasis.integrals.libcint import ELEMENTS
+import gbasis.parsers
+import re
+from os.path import exists
+
+def parse_gbs(f: str):
+    """Uses gbasis parser, but also allows input to be string.
+    I had to copy code from gbasis to get this to work. Credits listed below."""
+    gbs_basis = ''
+
+    try:
+        if exists(f):
+            gbs_file = open(f, 'r')
+            f = gbs_file.read()
+            gbs_file.close()
+    except OSError:
+        print("File not found, trying to parse basis from input.")
+    
+    gbs_basis = f
+
+    __credits__ = ["https://github.com/theochem/gbasis"]
+    __license__ = "GPL"
+    __author__ = "Taewon David Kim, Leila Pujal, et. al."
+
+    data = re.split(r"\n\s*(\w[\w]?)\s+\w+\s*\n", gbs_basis)
+    dict_angmom = {"s": 0, "p": 1, "d": 2, "f": 3, "g": 4, "h": 5, "i": 6, "k": 7}
+    # remove first part
+    if "\n" in data[0]:  # pragma: no branch
+        data = data[1:]
+    # atoms: stride of 2 get the ['H','C', etc]. basis: take strides of 2 to skip elements
+    atoms = data[::2]
+    basis = data[1::2]
+    # trim out headers at the end
+    output = {}
+    for atom, shells in zip(atoms, basis):
+        output.setdefault(atom, [])
+        shells = re.split(r"\n?\s*(\w+)\s+\w+\s+\w+\.\w+\s*\n", shells)
+        atom_basis = shells[1:]
+        angmom_shells = atom_basis[::2]
+        exps_coeffs_shells = atom_basis[1::2]
+        for angmom_seg, exp_coeffs in zip(angmom_shells, exps_coeffs_shells):
+            angmom_seg = [dict_angmom[i.lower()] for i in angmom_seg]
+            exps = []
+            coeffs_seg = []
+            exp_coeffs = exp_coeffs.split("\n")
+            for line in exp_coeffs:
+                test = re.search(r"^\s*([0-9\.DE\+\-]+)\s+((?:(?:[0-9\.DE\+\-]+)\s+)*(?:[0-9\.DE\+\-]+))\s*$", line,)
+                try:
+                    exp, coeff_seg = test.groups()
+                    coeff_seg = re.split(r"\s+", coeff_seg)
+                except AttributeError:
+                    continue
+                exp = float(exp.lower().replace("d", "e"))
+                coeff_seg = [float(i.lower().replace("d", "e")) for i in coeff_seg if i is not None]
+                exps.append(exp)
+                coeffs_seg.append(coeff_seg)
+            exps = np.array(exps)
+            coeffs_seg = np.array(coeffs_seg)
+            for i, angmom in enumerate(angmom_seg):
+                # ensure previous and current exps are same length before using np.allclose()
+                if output[atom] and len(output[atom][-1][1]) == len(exps):
+                    # check if current exp's should be added to previous generalized contraction
+                    hstack = np.allclose(output[atom][-1][1], exps)
+                else:
+                    hstack = False
+                if output[atom] and output[atom][-1][0] == angmom and hstack:
+                    output[atom][-1] = (
+                        angmom,
+                        exps,
+                        np.hstack([output[atom][-1][2], coeffs_seg[:, i : i + 1]]),
+                    )
+                else:
+                    output[atom].append((angmom, exps, coeffs_seg[:, i : i + 1]))
+    return output
+
 
 def parse_mol(f, atomic_units=True):
     """Parse a file into coords as a dictionary using XYZ format.
@@ -29,6 +98,8 @@ def parse_mol(f, atomic_units=True):
     a = a.split('\n')
 
     for l_num, line in enumerate(a):
+        if line.startswith('angstrom'):
+            atomic_units=False
         s = line.split()
         s = [f for f in s if f!='']
         if (len(s) >= 4):
@@ -108,7 +179,7 @@ class molecular_grid:
         grid_points = np.vstack(np.meshgrid(self.X,self.Y,self.Z,indexing="ij")).reshape(3, -1).T
 
         atoms = [ELEMENTS[a] for a in Z]
-        contractions = make_contractions(self.wfn.basis, atoms, new_coords, coord_types="cartesian")
+        contractions = gbasis.parsers.make_contractions(self.wfn.basis, atoms, new_coords, coord_types="cartesian")
         eval_points = evaluate_basis(contractions, grid_points, transform=self.transform)
 
         # grid_points = grid_points.reshape((*self.shape,3))

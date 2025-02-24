@@ -9,9 +9,8 @@ Simple Hartree-Fock program to compute my molecular orbitals for me.
 __author__ = "Nathan Gillispie"
 
 import numpy as np
-from gbasis.parsers import parse_gbs
 
-from utils import parse_mol, molecular_grid, np2mathematica
+from utils import parse_mol, parse_gbs, molecular_grid, np2mathematica
 import constants
 from rhf import RHF
 

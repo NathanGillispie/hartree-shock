@@ -5,80 +5,125 @@ import numpy as np
 # from scipy.linalg import eigh
 
 import ints
-from wavefunction import wavefunction
+import wavefunction as wfn
 from utils import SCFConvergeError
 import constants
+from math import log10
 
-class RHF(wavefunction):
+class RHF(wfn.wavefunction):
     """RHF class, instantiated with molecule, basis and optionally\
     charge and multiplicity."""
+
+    def __init__(self, molecule, basis):
+        super().__init__(molecule, basis)
+        occ = self.occupied_orbitals()
+        print(f"(occ/nbf) {occ}/{self.nbf}")
+
+        S_inv = self.S_inv   # Orthogonalization matrix
+        H_core = self.H_core # Kinetic + nuc_attr
+        E_nuc = self.E_nuc   # Nuclear repulsion
+
+        # Initial fock matrix and MO coefficients using core guess
+        # Core guess means F_0' = H_core
+        F_0 = S_inv.T @ H_core @ S_inv
+        self.MO_energies, self.C_MO = np.linalg.eigh(F_0)
+        C_0 = S_inv @ self.C_MO
+
+        # Initial density
+        self.D = np.einsum("mk,nk->mn",C_0[:,:occ],C_0[:,:occ],optimize=True)
+
+        # Initial energy (using the core guess)
+        E_elec = np.trace(self.D @ (H_core + H_core))
+        self.E_tot = E_elec + E_nuc
+
+        # Set initial C
+        self.C = C_0
+        self.HOMO = self.C.T[occ-1]
+        self.LUMO = self.C.T[occ]
+        self.occ = occ
 
     def compute_E(self, debug=False):
         """Computes the RHF energy. Returns (energy, MOs). Has debug flag"""
         start = perf_counter()
 
-        # grab the integrals
-        ovlp, E_nuc, kinetic, nuc_attr, eri = self.ints
-        H_core = nuc_attr + kinetic
+        eri = self.ints["eri"]
+        H_core = self.H_core
+        S_inv = self.S_inv
+        E_nuc = self.E_nuc
+        occ = self.occ
+        D = self.D
+        E_tot = self.E_tot
+        C_MO = self.C_MO
 
-        # Initial energy
-        E_elec = np.trace(self.D @ (H_core + H_core))
-        E_tot = E_elec + E_nuc
-        
         if (debug):
-            print("Initial orbital energies: %sEh"%np.array2string(epsilon_0,precision=3,max_line_width=150,suppress_small=True,separator=''))
-            print("\nIter  0: %.6f Eh"%E_tot)
+            print("Initial orbital energies: %sEh"%np.array2string(self.MO_energies,precision=3,max_line_width=150,suppress_small=True,separator=''))
+            print("\nIter  0: %.6f Eh"%self.E_tot)
 
         delta_E = 1
-        previous_E = E_tot
         iteration = 0
-        start_SCF = perf_counter()
-        while(delta_E > 1e-8):
-            iteration += 1
+        progress = wfn.SCF_progress(self.E_tot,self.e_conv,debug=debug)
 
-            # Using PREVIOUS density: H = T + V + 2J - K
-            JK = np.einsum("ls,mnls->mn",
-                           self.D,
-                           2*eri - eri.transpose((0,2,1,3)),
-                           optimize=True)
+        with progress.shocking_bar() as bar:
+            while not self.converged(delta_E):
+                iteration += 1
+                if iteration >= 200:
+                    raise SCFConvergeError("ΔE=%.6f"%delta_E)
 
-            F_AO = JK + H_core
+                JK = np.einsum("ls,mnls->mn", D,
+                               2*eri - eri.transpose((0,2,1,3)),
+                               optimize=True)
 
-            F = self.S_inv.T @ F_AO @ self.S_inv            # Orthogonalize fock
-            self.MO_energies, self.C_MO = np.linalg.eigh(F) # Diagonalize fock
-            C = (self.S_inv @ self.C_MO).real               # Back transform
+                self.F_AO = JK + H_core
 
-            # Compute new density
-            self.D = np.einsum("mk,nk->mn",C[:,:self.occ],C[:,:self.occ],optimize=True)
+                F = S_inv.T @ self.F_AO @ S_inv            # Orthogonalize fock
+                self.MO_energies, C_MO = np.linalg.eigh(F) # Diagonalize fock
+                self.C = (S_inv @ C_MO).real               # Back transform
 
-            E_elec = np.trace(self.D @ (F_AO + H_core))
+                # Compute new density
+                D = np.einsum("mk,nk->mn",self.C[:,:occ],self.C[:,:occ],optimize=True)
 
-            delta_E = abs(E_elec + E_nuc - E_tot)
-            E_tot = E_elec + E_nuc # Previous iteration's Etot above
+                E_elec = np.trace(D @ (self.F_AO + H_core))
 
-            if (debug):
-                print("Iter%3d: %.6f Eh  ΔE=%.6f"%(iteration, E_tot, delta_E))
-            if (iteration > 200):
-                raise SCFConvergeError("ΔE=%.6f"%delta_E)
+                delta_E = E_elec + E_nuc - E_tot
+                E_tot = E_elec + E_nuc # Previous iteration's Etot above
 
-        SCF_time = (perf_counter() - start_SCF)/iteration
-        print("Average SCF time: %.3fms"%(1000*SCF_time))
+                progress.run(delta_E, E_tot, iteration, bar)
 
-        print("\nFinal RHF energy: %.9f"%E_tot)
+        E_HOMO = constants.au2ev * self.MO_energies[occ-1]
+        E_LUMO = constants.au2ev * self.MO_energies[occ]
+        E_GAP  = abs(E_HOMO-E_LUMO)
+        print("HOMO/LUMO: Δ(%.4f, %.4f) = %.4feV"%(E_HOMO, E_LUMO, E_GAP), end='')
+        if (E_GAP > 1e-20):
+            print("   %.2fnm"%(1239.8/E_GAP))
+        print("\nFinal RHF energy (Eh): %.9f"%E_tot)
 
-        # Show that the fock matrix is diagonal in MO basis
-        F_MO = np.einsum("mj,ni,mn->ij",C,C,F_AO, optimize=True)
-        if (np.abs(F_MO-F_MO.T).sum() > 1e-7):
-            print("Fock matrix is not orthogonal in the MO basis!")
-
-        self.C = C
-        self.HOMO = C.T[self.occ-1]
-        self.LUMO = C.T[self.occ]
+        self.HOMO = self.C.T[occ-1]
+        self.LUMO = self.C.T[occ]
+        self.D = D
+        self.E_tot = E_tot
+        self.C_MO = C_MO
 
         #print(np.array2string(D_0, precision=6, suppress_small=True, max_line_width=200))
-        return E_tot, C
+        return E_tot, self.C
+
+    def occupied_orbitals(self):
+        """Returns number of occupied oribitals"""
+        Z_total = np.asarray([a[0] for a in self.molecule], int).sum()
+        num_elec = Z_total - self.charge
+        unpaired_elec = self.mult - 1
+        # n_elec + unpaired pairs all electrons to form whole MOs
+        if ((num_elec + unpaired_elec) % 2 != 0):
+            exit("Incompatible charge and multiplicity")
+        occ = (num_elec + unpaired_elec)//2
+
+        if (occ > self.nbf):
+            exit("More occupied MOs than basis functions. This should never happen. Good luck.")
+        if (occ == self.nbf):
+            exit("No LUMO orbital, choose a large basis set")
+        return occ
 
     def write_molden(self, filename):
+        """Necessary to view MOs"""
         Z, coords = zip(*self.molecule)
         atom_names = [constants.Z_to_element[a] for a in Z]
         f = open(filename, 'w')
