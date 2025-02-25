@@ -6,13 +6,12 @@ from ints import integrals, nuclear_repulsion
 TEST_MOLECULES = [
     pytest.param("tests/molecules/water.xyz", id="water"),
     pytest.param("tests/molecules/acetaldehyde.xyz", id="acetaldehyde"),
-    pytest.param("tests/molecules/allene.xyz", id="allene"),
-    pytest.param("tests/molecules/benzene.xyz", id="benzene"),
+    pytest.param("tests/molecules/NiH2.xyz", id="NiH2"),
 ]
 
 TEST_BASIS = [
-    pytest.param("tests/basis/sto-3g.gbs", id="sto-3g"),
-    pytest.param("tests/basis/cc-pVDZ.gbs", id="cc-pVDZ"),
+    pytest.param("tests/basis/6-31G.gbs", id="6-31G"),
+    pytest.param("tests/basis/def2-TZVP.gbs", id="def2-TZVP"),
 ]
 
 @pytest.mark.parametrize("molecule", TEST_MOLECULES)
@@ -24,7 +23,7 @@ def test_build_molecule(molecule, basis):
 @pytest.mark.parametrize("basis", TEST_BASIS)
 def test_integrals(molecule, basis):
     m, b = build_molecule(molecule, basis)
-    mints =integrals(m,b)
+    mints =integrals(m,b,True)
 
     ovlp = mints.overlap()
     E_nuc =nuclear_repulsion(m)

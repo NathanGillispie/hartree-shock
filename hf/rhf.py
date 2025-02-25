@@ -10,6 +10,8 @@ from utils import SCFConvergeError
 import constants
 from math import log10
 
+from diis import DIIS
+
 class RHF(wfn.wavefunction):
     """RHF class, instantiated with molecule, basis and optionally\
     charge and multiplicity."""
@@ -42,8 +44,8 @@ class RHF(wfn.wavefunction):
         self.LUMO = self.C.T[occ]
         self.occ = occ
 
-    def compute_E(self, debug=False):
-        """Computes the RHF energy. Returns (energy, MOs). Has debug flag"""
+    def compute_E(self, use_diis=True):
+        """Computes the RHF energy. Returns (energy, MOs)."""
         start = perf_counter()
 
         eri = self.ints["eri"]
@@ -55,13 +57,16 @@ class RHF(wfn.wavefunction):
         E_tot = self.E_tot
         C_MO = self.C_MO
 
-        if (debug):
+        if (self.debug):
             print("Initial orbital energies: %sEh"%np.array2string(self.MO_energies,precision=3,max_line_width=150,suppress_small=True,separator=''))
             print("\nIter  0: %.6f Eh"%self.E_tot)
 
         delta_E = 1
         iteration = 0
-        progress = wfn.SCF_progress(self.E_tot,self.e_conv,debug=debug)
+        progress = wfn.SCF_progress(self)
+
+        if (use_diis):
+            diis = DIIS(self, keep=8)
 
         with progress.shocking_bar() as bar:
             while not self.converged(delta_E):
@@ -74,6 +79,10 @@ class RHF(wfn.wavefunction):
                                optimize=True)
 
                 self.F_AO = JK + H_core
+
+                # Warning: using previous Density for diis
+                if (use_diis):
+                    self.F_AO = diis.compute_F(self.F_AO, D)
 
                 F = S_inv.T @ self.F_AO @ S_inv            # Orthogonalize fock
                 self.MO_energies, C_MO = np.linalg.eigh(F) # Diagonalize fock
@@ -122,11 +131,14 @@ class RHF(wfn.wavefunction):
             exit("No LUMO orbital, choose a large basis set")
         return occ
 
-    def write_molden(self, filename):
+    def write_molden(self, file):
         """Necessary to view MOs"""
         Z, coords = zip(*self.molecule)
         atom_names = [constants.Z_to_element[a] for a in Z]
-        f = open(filename, 'w')
+
+        f = file
+        if type(file) == str:
+            f = open(f, 'w')
 
         f.write("[Molden Format]\n[Atoms] (AU)\n")
         for atom, i, Z, coord in zip(atom_names,range(len(Z)), Z, coords):

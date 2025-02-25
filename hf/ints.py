@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """
-File to compute nuclear repulsion, overlap, kinetic, and nuclear attraction integrals.
-Uses the gbasis library which uses libcint as the integral computer.
+File to compute nuclear repulsion, overlap, kinetic, and nuclear attraction
+integrals. Uses the gbasis library which uses libcint as the integral computer.
+Optionally, you can disable libcint and use the gbasis integral computer in
+pure python but this is much slower.
 """
 import numpy as np
 from gbasis.parsers import make_contractions, parse_gbs
@@ -25,7 +27,7 @@ def nuclear_repulsion(molecule):
     return energy
 
 class integrals:
-    def __init__(self, molecule, basis, use_libcint=False):
+    def __init__(self, molecule, basis, use_libcint):
         self.molecule = molecule
         self.basis = basis
         self.use_libcint = use_libcint
@@ -37,6 +39,7 @@ class integrals:
         atsyms = [ELEMENTS[atom] for atom in Z]
 
         self.shells = make_contractions(basis, atsyms, atcoords, coord_types="cartesian")
+
         self.lc_basis = None
         self.lc_basis = CBasis(self.shells, atsyms, atcoords, coord_type="cartesian")
         if use_libcint:
@@ -68,10 +71,14 @@ class integrals:
         else:
             eri = ElectronRepulsionIntegral(self.shells)
             return eri.construct_array_cartesian()
-    
+
 
     def nbf(self):
-        return self.lc_basis.nbfn
+        if self.use_libcint:
+            return self.lc_basis.nbfn
+        else:
+            n_funcs = [s.num_cart for s in self.shells]
+            return sum(n_funcs)
     def nshells(self):
         return len(self.shells)
 

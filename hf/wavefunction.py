@@ -10,15 +10,16 @@ import ints
 class wavefunction:
     """Base class"""
 
-    def __init__(self, molecule, basis, charge=0, multiplicity=1):
+    def __init__(self, molecule, basis, charge=0, multiplicity=1, debug=False, use_libcint=True):
         self.molecule = molecule
         self.basis = basis
         self.charge = charge
         self.mult = multiplicity
         self.e_conv = 1e-6
         self.delta_E = 1
+        self.debug = debug
 
-        mints = ints.integrals(molecule, basis)
+        mints = ints.integrals(molecule, basis, use_libcint)
 
         self.nbf = mints.nbf()
 
@@ -51,11 +52,15 @@ class wavefunction:
 
 
 class SCF_progress():
-    def __init__(self, start, end, debug=False):
-        self.start = -log10(abs(start))
-        self.end = -log10(abs(end))
+    def __init__(self, wfn):
+        """
+        SCF progress bar. Initializes with wavefunction object.
+        Make sure that the initial energy has already been set.
+        """
+        self.start = -log10(abs(wfn.E_tot))
+        self.end = -log10(abs(wfn.e_conv))
         self.t_since_SCF = perf_counter()
-        self.debug = debug
+        self.debug = wfn.debug
 
     def shocking_bar(self):
         return alive_bar(manual=True, bar=bar_factory(chars='⚡'), length=40)

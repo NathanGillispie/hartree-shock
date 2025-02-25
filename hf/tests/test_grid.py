@@ -7,14 +7,28 @@ from rhf import RHF
 from utils import molecular_grid
 
 @pytest.fixture
-def do_scf():
+def do_wfn():
     wfn = RHF(*build_molecule("tests/molecules/water.xyz", "tests/basis/sto-3g.gbs"))
     wfn.compute_E()
+    return wfn
+
+@pytest.fixture
+def do_grid(do_wfn):
+    wfn = do_wfn
     grid = molecular_grid(wfn, spacing=1, extension=1)
     return grid.get_grid_eval()
 
-def test_points(do_scf):
-    points, _ = do_scf
+def test_molden(do_wfn):
+    wfn = do_wfn
+    import io
+    file = io.StringIO("")
+    wfn.write_molden(file)
+
+def test_occ(do_wfn):
+    assert do_wfn.occupied_orbitals() == 5
+
+def test_points(do_grid):
+    points, _ = do_grid
     points_ref = np.array([[-3., -2., -1.],  [-3., -2.,  0.],  [-3., -1., -1.],
          [-3., -1.,  0.],  [-3.,  0., -1.],  [-3.,  0.,  0.],  [-3.,  1., -1.],
          [-3.,  1.,  0.],  [-2., -2., -1.],  [-2., -2.,  0.],  [-2., -1., -1.],
@@ -32,8 +46,8 @@ def test_points(do_scf):
     points_diff = np.abs(points - points_ref).sum()
     assert points_diff < 1e-6
 
-def test_eval(do_scf):
-    _, eval = do_scf
+def test_eval(do_grid):
+    _, eval = do_grid
     eval_ref = np.array([-1.16965616e-03,  3.91607989e-19, -3.01759685e-03,  1.30027106e-18,
        -3.63583811e-03,  6.65887101e-18, -2.04248526e-03,  1.30897467e-17,
        -7.92042013e-03, -2.55218507e-18, -2.17750131e-02, -6.78369338e-18,
@@ -49,4 +63,5 @@ def test_eval(do_scf):
 
     eval_diff = np.abs(eval[4] - eval_ref).sum()
     assert eval_diff < 1e-6
+
 
