@@ -14,6 +14,8 @@ from gbasis.integrals.kinetic_energy import KineticEnergyIntegral
 import gbasis.integrals.nuclear_electron_attraction as nuc_attr
 from gbasis.integrals.electron_repulsion import ElectronRepulsionIntegral
 
+# ('only spinner', dict(bar=None, monitor=False, elapsed=False, stats=False))
+
 def nuclear_repulsion(molecule):
     natom = len(molecule)
     energy = 0

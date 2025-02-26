@@ -5,21 +5,34 @@ from gbasis.evals.eval import evaluate_basis
 from gbasis.integrals.libcint import ELEMENTS
 import gbasis.parsers
 import re
-from os.path import exists
+
+import os
+import os.path as op
 
 def parse_gbs(f: str):
     """Uses gbasis parser, but also allows input to be string.
     I had to copy code from gbasis to get this to work. Credits listed below."""
     gbs_basis = ''
 
-    try:
-        if exists(f):
-            gbs_file = open(f, 'r')
-            f = gbs_file.read()
-            gbs_file.close()
-    except OSError:
-        print("File not found, trying to parse basis from input.")
-    
+    if op.isfile(f):
+        gbsio = open(f, 'r')
+        f = gbsio.read()
+        gbsio.close()
+    else:
+        list_dir = os.listdir("tests/basis")
+        bases = [op.splitext(os.path.basename(a))[0] for a in list_dir]
+        basis_map = {}
+        for basis in bases:
+            basis_map[basis.lower()] = "tests/basis/"+basis+".gbs"
+
+        if f.lower() in basis_map.keys():
+            filename = basis_map[f.lower()]
+            gbsio = open(filename, 'r')
+            f = gbsio.read()
+            gbsio.close()
+        else:
+            print("File not found, trying to parse basis from input.")
+
     gbs_basis = f
 
     __credits__ = ["https://github.com/theochem/gbasis"]
@@ -84,9 +97,11 @@ def parse_mol(f, atomic_units=True):
 
     Numbers are delimited by whitespace.
     """
-    try:
+    if op.isfile(f):
         mol_file = open(f, 'r')
-    except FileNotFoundError:
+    elif op.isfile("tests/molecules/"+f+".xyz"):
+        mol_file = open("tests/molecules/"+f+".xyz")
+    else:
         print("File not found, trying to parse molecule directly from input.")
         import io
         mol_file = io.StringIO(f)
@@ -137,11 +152,12 @@ def write_mos(C, nel, filename:str) -> None:
     print("File written to %s!"%mos_filename)
 
 class molecular_grid:
-    def __init__(self, wfn, transform=None, spacing=0.2, extension=4.0):
+    def __init__(self, wfn, spacing=0.2, extension=4.0, **kwargs):
         self.wfn = wfn
-        self.transform = transform
-        if (transform == None):
-            self.transform = wfn.S_inv
+        if ('transform' in kwargs.keys()):
+            self.transform = kwargs['transform']
+        else:
+            self.transform = None
         self.spacing = spacing
         self.extension = extension
 

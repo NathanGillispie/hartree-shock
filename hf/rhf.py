@@ -1,23 +1,66 @@
 
 from time import perf_counter
 import numpy as np
+from math import log10
 # Alternate eigenvalue computer
 # from scipy.linalg import eigh
 
-import ints
 import wavefunction as wfn
 from utils import SCFConvergeError
 import constants
-from math import log10
 
 from diis import DIIS
+
+def parr(A):
+    print(np.array2string(A, max_line_width=200, precision=3))
+
+def heatmap(graph, D, labels):
+    """Assuming:
+    ```py
+    import matplotlib.pyplot as plt
+    plt.ion()
+    fig, graph = plt.subplots()
+    fig.tight_layout()
+    fig.set_size_inches(8,8)
+    ```
+    """
+    graph.matshow(D)
+
+    graph.set_xticks(range(D.shape[0]), labels=labels,
+                     ha="right", rotation=-30, rotation_mode="anchor")
+    graph.set_yticks(range(D.shape[0]), labels=labels)
+    graph.grid(which="minor", color="w", linestyle='-', linewidth=3)
+
+def make_labels(wfn):
+    from gbasis.parsers import make_contractions
+    basis = wfn.basis
+    Z, coords = zip(*wfn.molecule)
+    atoms = [constants.Z_to_element[a] for a in Z]
+    shells = make_contractions(basis, atoms, np.asarray(coords), coord_types="cartesian")
+
+    labels = []
+    L_to_subshell = ["s", "p", "d", "f", "g"]
+
+    for s in shells:
+        atom = atoms[s.icenter]
+        spdf = L_to_subshell[s.angmom]
+        for _ in range(s.num_seg_cont):
+            if s.num_cart == 1:
+                labels.append(f"{atom}:{spdf}")
+            else:
+                for i in range(s.num_cart):
+                    labels.append(f"{atom}:{spdf}{i}")
+
+    return labels
 
 class RHF(wfn.wavefunction):
     """RHF class, instantiated with molecule, basis and optionally\
     charge and multiplicity."""
 
-    def __init__(self, molecule, basis):
+    def __init__(self, molecule, basis, plot=False):
         super().__init__(molecule, basis)
+        self.plot = plot
+
         occ = self.occupied_orbitals()
         print(f"(occ/nbf) {occ}/{self.nbf}")
 
@@ -68,20 +111,33 @@ class RHF(wfn.wavefunction):
         if (use_diis):
             diis = DIIS(self, keep=8)
 
+        if self.plot:
+            labels = make_labels(self)
+            import matplotlib.pyplot as plt
+            plt.ion()
+            fig, graph = plt.subplots()
+            fig.set_size_inches(8,8)
+            heatmap(graph, H_core, labels)
+            fig.tight_layout()
+
         with progress.shocking_bar() as bar:
             while not self.converged(delta_E):
                 iteration += 1
                 if iteration >= 200:
                     raise SCFConvergeError("ΔE=%.6f"%delta_E)
 
-                JK = np.einsum("ls,mnls->mn", D,
-                               2*eri - eri.transpose((0,2,1,3)),
-                               optimize=True)
+                # JK = np.einsum("ls,mnls->mn", D,
+                #                2*eri - eri.transpose((0,2,1,3)),
+                #                optimize=True)
 
-                self.F_AO = JK + H_core
+                J = np.einsum("ls,mnls->mn",D, eri, optimize=True)
+                K = np.einsum("ls,mnls->mn",D, eri.transpose((0,2,1,3)), optimize=True)
 
-                # Warning: using previous Density for diis
+                # self.F_AO = JK + H_core
+                self.F_AO = H_core + 2*J - K
+
                 if (use_diis):
+                    # Using previous density
                     self.F_AO = diis.compute_F(self.F_AO, D)
 
                 F = S_inv.T @ self.F_AO @ S_inv            # Orthogonalize fock
@@ -98,6 +154,10 @@ class RHF(wfn.wavefunction):
 
                 progress.run(delta_E, E_tot, iteration, bar)
 
+                if self.plot:
+                    heatmap(graph, D, labels)
+                    plt.pause(1)
+
         E_HOMO = constants.au2ev * self.MO_energies[occ-1]
         E_LUMO = constants.au2ev * self.MO_energies[occ]
         E_GAP  = abs(E_HOMO-E_LUMO)
@@ -112,7 +172,8 @@ class RHF(wfn.wavefunction):
         self.E_tot = E_tot
         self.C_MO = C_MO
 
-        #print(np.array2string(D_0, precision=6, suppress_small=True, max_line_width=200))
+        if self.plot:
+            input("Press enter to continue...")
         return E_tot, self.C
 
     def occupied_orbitals(self):

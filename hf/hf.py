@@ -60,24 +60,54 @@ if __name__ == "__main__":
     result = parse()
     molecule, basis = build_molecule(result.mol, result.basis)
 
-    wfn = RHF(molecule, basis)
-    E, C = wfn.compute_E()
+    save = True
+    global wfn
+
+    import pickle
+    if save:
+        wfn = RHF(molecule, basis)
+        E, C = wfn.compute_E()
+        with open("cinnom.pkl", "wb") as f:
+            pickle.dump(wfn,f)
+    else:
+        with open("cinnom.pkl", "rb") as f:
+            wfn = pickle.load(f)
+
     HOMO = wfn.occ
-    AO2MO = wfn.S_inv
+    AO2MO = wfn.C_MO.T
 
-    wfn.write_molden("h2o.molden")
+    # wfn.write_molden("h2o.molden")
 
-    # grid = molecular_grid(wfn, spacing=.1, extension=3)
+    global grid
+    grid = molecular_grid(wfn, spacing=.18, extension=3, transform=AO2MO)
 
-    # X, Y, Z = grid.grid_eval_x(HOMO)
-    # X, Y = np.meshgrid(X,Y)
-    #
-    # import matplotlib.pyplot as plt
+    points, eval = grid.eval_basis_grid()
+    X, Y, Z = tuple(points.T.reshape(np.insert(grid.shape, 0, 3)))
     
-    # plt.figure(figsize=(8,8))
-    # plt.axis('equal')
-    # cs = plt.contourf(X,Y,Z,extend='both',cmap='bwr')
-    # plt.show()
-
+    values = np.log(eval[HOMO]**2)
+    
+    import plotly.graph_objects as go
+    # fig= go.Figure(data=go.Isosurface(
+    #     x=X.flatten(),
+    #     y=Y.flatten(),
+    #     z=Z.flatten(),
+    #     value=values.flatten(),
+    #     isomin=0.001,
+    #     isomax=0.01,
+    #     surface_count=2,
+    #     colorbar_nticks=2
+    # ))
+    print("Plotting...")
+    fig = go.Figure(data=go.Volume(
+        x=X.flatten(),
+        y=Y.flatten(),
+        z=Z.flatten(),
+        value=values.flatten(),
+        isomin=-7,
+        isomax=-2.5,
+        opacity=0.12, # needs to be small to see through all surfaces
+        surface_count=7
+    ))
+    fig.show()
 
 

@@ -4,6 +4,7 @@ from alive_progress.animations.bars import bar_factory
 from time import perf_counter
 import numpy as np
 from math import log10
+from alive_progress import alive_bar
 
 import ints
 
@@ -23,17 +24,14 @@ class wavefunction:
 
         self.nbf = mints.nbf()
 
-        # Compute integrals
-        start = perf_counter()
-        print("Computing Integrals", end='', flush=True)
+        with alive_bar(bar=None, title="Computing Integrals", monitor=False,
+                       elapsed=True, stats=False, spinner='arrows_out') as bar:
+            self.E_nuc = ints.nuclear_repulsion(molecule)
+            eri = mints.electron_repulsion()
+            kinetic = mints.kinetic_energy()
+            nuc_attr = mints.nuclear_attraction()
+            ovlp = mints.overlap()
 
-        self.E_nuc = ints.nuclear_repulsion(molecule)
-        ovlp = mints.overlap()
-        kinetic = mints.kinetic_energy()
-        nuc_attr = mints.nuclear_attraction()
-        eri = mints.electron_repulsion()
-
-        print(": %.0fms"%(1000*(perf_counter() - start)))
         self.ints = {"overlap": ovlp,
                      "kinetic": kinetic,
                      "nuclear": nuc_attr,
@@ -57,7 +55,6 @@ class SCF_progress():
         SCF progress bar. Initializes with wavefunction object.
         Make sure that the initial energy has already been set.
         """
-        self.start = -log10(abs(wfn.E_tot))
         self.end = -log10(abs(wfn.e_conv))
         self.t_since_SCF = perf_counter()
         self.debug = wfn.debug
@@ -67,7 +64,7 @@ class SCF_progress():
 
     def _norm(self, E):
         lE = -log10(E)
-        return (lE - self.start)/self.end
+        return lE/self.end
 
     def _clamp01(cls, a):
         if (a < 0):
@@ -82,12 +79,11 @@ class SCF_progress():
 
     def run(self, delta_E, E_tot, iteration, bar):
         bar(self.iter(delta_E))
-        bar.title="SCF iter:%3d"%iteration
+        bar.title=" SCF:%3d"%iteration
         if (self.debug):
             now = perf_counter()
             dt = now - self.t_since_SCF
             self.t_since_SCF = now
             print("Iter%3d: %.6f Eh  ΔE=%.6f  %.2fms"%(iteration, E_tot, abs(self.delta_E), dt*1000. ))
-
 
 
