@@ -3,9 +3,9 @@ from gbasis.parsers import make_contractions
 import numpy as np
 from gbasis.integrals.electron_repulsion import ElectronRepulsionIntegral
 
-import ints
-from utils import parse_gbs, parse_mol
-import wavefunction
+import hs.ints as ints
+from hs.utils import parse_gbs, parse_mol
+import hs.wavefunction as wavefunction
 
 @pytest.fixture(autouse=True)
 def ints_inorg():
@@ -23,7 +23,7 @@ D    2   1.00
       0.2819147000D+02       0.9098880504D-01
 ****
 """)
-    molecule = parse_mol("tests/molecules/NiH2.xyz")
+    molecule = parse_mol("NiH2")
     
     gbasis_ints  = wavefunction.wavefunction(molecule, basis, use_libcint=False).ints
     libcint_ints = wavefunction.wavefunction(molecule, basis, use_libcint=True).ints

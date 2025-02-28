@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import numpy as np
 from gbasis.evals.eval import evaluate_basis
@@ -18,7 +17,7 @@ def parse_gbs(f: str):
         f = gbsio.read()
         gbsio.close()
     else:
-        basis_dir = op.join(op.dirname(op.abspath(__file__)),"tests/basis")
+        basis_dir = op.join(op.dirname(op.abspath(__file__)),"basis")
         bases = [op.splitext(os.path.basename(a))[0] for a in os.listdir(basis_dir)]
         basis_map = {}
         for basis in bases:
@@ -99,7 +98,7 @@ def parse_mol(f, atomic_units=True):
     if op.isfile(f):
         mol_file = open(f, 'r')
     else:
-        mol_dir = op.join(op.dirname(op.abspath(__file__)),"tests/molecules")
+        mol_dir = op.join(op.dirname(op.abspath(__file__)),"molecules")
         molecules = [op.splitext(op.basename(a))[0] for a in os.listdir(mol_dir)]
         mol_map = {}
         for mol in molecules:

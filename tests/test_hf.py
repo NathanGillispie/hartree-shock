@@ -1,17 +1,19 @@
 import pytest
 
-from hf import build_molecule
-from ints import integrals, nuclear_repulsion
+# from hs import build_molecule
+# from ints import integrals, nuclear_repulsion
+from hs.hf import build_molecule
+from hs.ints import integrals, nuclear_repulsion
 
 TEST_MOLECULES = [
-    pytest.param("tests/molecules/water.xyz", id="water"),
-    pytest.param("tests/molecules/acetaldehyde.xyz", id="acetaldehyde"),
-    pytest.param("tests/molecules/NiH2.xyz", id="NiH2"),
+    pytest.param("water", id="water"),
+    pytest.param("acetaldehyde", id="acetaldehyde"),
+    pytest.param("NiH2", id="NiH2"),
 ]
 
 TEST_BASIS = [
-    pytest.param("tests/basis/6-31G.gbs", id="6-31G"),
-    pytest.param("tests/basis/def2-TZVP.gbs", id="def2-TZVP"),
+    pytest.param("6-31G", id="6-31G"),
+    pytest.param("def2-TZVP", id="def2-TZVP"),
 ]
 
 @pytest.mark.parametrize("molecule", TEST_MOLECULES)

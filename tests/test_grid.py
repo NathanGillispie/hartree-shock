@@ -2,13 +2,13 @@
 import pytest
 
 import numpy as np
-from hf import build_molecule
-from rhf import RHF
-from utils import molecular_grid
+from hs.hf import build_molecule
+from hs.rhf import RHF
+from hs.utils import molecular_grid
 
 @pytest.fixture
 def do_wfn():
-    wfn = RHF(*build_molecule("tests/molecules/water.xyz", "tests/basis/sto-3g.gbs"))
+    wfn = RHF(*build_molecule("water", "sto-3g"))
     wfn.compute_E()
     return wfn
 

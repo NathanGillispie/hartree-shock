@@ -129,6 +129,7 @@ class RHF(wfn.wavefunction):
                 iteration += 1
                 if iteration >= 200:
                     raise SCFConvergeError("ΔE=%.6f"%delta_E)
+                    break
 
                 # JK = np.einsum("ls,mnls->mn", D,
                 #                2*eri - eri.transpose((0,2,1,3)),
