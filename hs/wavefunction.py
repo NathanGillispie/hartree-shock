@@ -11,7 +11,7 @@ import ints
 class wavefunction:
     """Base class"""
 
-    def __init__(self, molecule, basis, charge=0, multiplicity=1, debug=False, use_libcint=True):
+    def __init__(self, molecule, basis, charge=0, multiplicity=1, debug=False, use_libcint=True, integrals={}):
         self.molecule = molecule
         self.basis = basis
         self.charge = charge
@@ -20,24 +20,30 @@ class wavefunction:
         self.delta_E = 1
         self.debug = debug
 
-        mints = ints.integrals(molecule, basis, use_libcint)
+        if integrals=={}:
+            mints = ints.integrals(molecule, basis, use_libcint)
 
-        self.nbf = mints.nbf()
+            self.nbf = mints.nbf()
 
-        with alive_bar(bar=None, title="Computing Integrals", monitor=False,
-                       elapsed=True, stats=False, spinner='arrows_out') as bar:
-            self.E_nuc = ints.nuclear_repulsion(molecule)
-            eri = mints.electron_repulsion()
-            kinetic = mints.kinetic_energy()
-            nuc_attr = mints.nuclear_attraction()
-            ovlp = mints.overlap()
+            with alive_bar(bar=None, title="Computing Integrals", monitor=False,
+                           elapsed=True, stats=False, spinner='arrows_out') as bar:
+                E_nuc = ints.nuclear_repulsion(molecule)
+                eri = mints.electron_repulsion()
+                kinetic = mints.kinetic_energy()
+                nuc_attr = mints.nuclear_attraction()
+                ovlp = mints.overlap()
 
-        self.ints = {"overlap": ovlp,
-                     "kinetic": kinetic,
-                     "nuclear": nuc_attr,
-                     "eri"    : eri}
+            self.ints = {"overlap": ovlp,
+                         "kinetic": kinetic,
+                         "nuclear": nuc_attr,
+                         "eri"    : eri,
+                         "E_nuc"  : E_nuc,
+                         "nbf"    : self.nbf}
+        else:
+            self.ints = integrals
+            ovlp = self.ints["overlap"]
+            self.nbf = self.ints["nbf"]
 
-        self.H_core = nuc_attr + kinetic
 
         # Orthogonalization matrix
         Lambda_S, L_S = np.linalg.eigh(ovlp)

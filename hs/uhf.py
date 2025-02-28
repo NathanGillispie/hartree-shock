@@ -11,8 +11,7 @@ import constants
 
 from diis import DIIS
 
-def parr(A):
-    print(np.array2string(A, max_line_width=200, precision=3))
+import matplotlib as mpl
 
 def heatmap(graph, D, labels):
     """Assuming:
@@ -24,7 +23,7 @@ def heatmap(graph, D, labels):
     fig.set_size_inches(8,8)
     ```
     """
-    graph.matshow(D)
+    graph.matshow(D, cmap=mpl.colormaps['seismic'], vmin=-3.2, vmax=3.2)
 
     graph.set_xticks(range(D.shape[0]), labels=labels,
                      ha="right", rotation=-30, rotation_mode="anchor")
@@ -53,20 +52,20 @@ def make_labels(wfn):
 
     return labels
 
-class RHF(wfn.wavefunction):
-    """RHF class, instantiated with molecule, basis and optionally\
+class UHF(wfn.wavefunction):
+    """UHF class, instantiated with molecule, basis and optionally\
     charge and multiplicity."""
 
-    def __init__(self, molecule, basis, plot=False):
-        super().__init__(molecule, basis)
+    def __init__(self, molecule, basis, plot=False, **kwargs):
+        super().__init__(molecule, basis, **kwargs)
         self.plot = plot
 
-        occ = self.occupied_orbitals()
-        print(f"(occ/nbf) {occ}/{self.nbf}")
+        self.occ_a, self.occ_b = self.occupied_orbitals()
+        print(f"(occ/nbf) {self.occ_a}/{self.nbf}")
 
         S_inv = self.S_inv   # Orthogonalization matrix
-        H_core = self.H_core # Kinetic + nuc_attr
-        E_nuc = self.E_nuc   # Nuclear repulsion
+        H_core = self.H_core = self.ints["kinetic"] + self.ints["nuclear"]
+        self.E_nuc = self.ints["E_nuc"]   # Nuclear repulsion
 
         # Initial fock matrix and MO coefficients using core guess
         # Core guess means F_0' = H_core
@@ -75,17 +74,16 @@ class RHF(wfn.wavefunction):
         C_0 = S_inv @ self.C_MO
 
         # Initial density
-        self.D = np.einsum("mk,nk->mn",C_0[:,:occ],C_0[:,:occ],optimize=True)
+        self.D_aa = C_0[:,:self.occ_a] @ C_0[:,:self.occ_a].T
+        self.D_bb = C_0[:,:self.occ_b] @ C_0[:,:self.occ_b].T
 
         # Initial energy (using the core guess)
-        E_elec = np.trace(self.D @ (H_core + H_core))
-        self.E_tot = E_elec + E_nuc
+        E_elec = np.trace(self.D_aa @ (H_core + H_core))
+        self.E_tot = E_elec + self.E_nuc
 
         # Set initial C
-        self.C = C_0
-        self.HOMO = self.C.T[occ-1]
-        self.LUMO = self.C.T[occ]
-        self.occ = occ
+        self.C_a = C_0
+        self.C_b = C_0
 
     def compute_E(self, use_diis=True):
         """Computes the RHF energy. Returns (energy, MOs)."""
@@ -94,11 +92,9 @@ class RHF(wfn.wavefunction):
         eri = self.ints["eri"]
         H_core = self.H_core
         S_inv = self.S_inv
-        E_nuc = self.E_nuc
-        occ = self.occ
-        D = self.D
+        D_aa = self.D_aa
+        D_bb = self.D_bb
         E_tot = self.E_tot
-        C_MO = self.C_MO
 
         if (self.debug):
             print("Initial orbital energies: %sEh"%np.array2string(self.MO_energies,precision=3,max_line_width=150,suppress_small=True,separator=''))
@@ -109,7 +105,8 @@ class RHF(wfn.wavefunction):
         progress = wfn.SCF_progress(self)
 
         if (use_diis):
-            diis = DIIS(self, keep=8)
+            diis_a = DIIS(self, keep=8)
+            diis_b = DIIS(self, keep=8)
 
         if self.plot:
             labels = make_labels(self)
@@ -126,71 +123,87 @@ class RHF(wfn.wavefunction):
                 if iteration >= 200:
                     raise SCFConvergeError("ΔE=%.6f"%delta_E)
 
-                # JK = np.einsum("ls,mnls->mn", D,
-                #                2*eri - eri.transpose((0,2,1,3)),
-                #                optimize=True)
+                J = np.einsum("ls,mnls->mn",(D_aa+D_bb), eri, optimize=True)
 
-                J = np.einsum("ls,mnls->mn",D, eri, optimize=True)
-                K = np.einsum("ls,mnls->mn",D, eri.transpose((0,2,1,3)), optimize=True)
+                K_a  = np.einsum("ls,mlns->mn",D_aa, eri, optimize=True)
+                K_b  = np.einsum("ls,mlns->mn",D_bb, eri, optimize=True)
 
-                # self.F_AO = JK + H_core
-                self.F_AO = H_core + 2*J - K
+                self.F_AO_a = H_core + J - K_a
+                self.F_AO_b = H_core + J - K_b
 
                 if (use_diis):
-                    # Using previous density
-                    self.F_AO = diis.compute_F(self.F_AO, D)
+                    self.F_AO_a = diis_a.compute_F(self.F_AO_a, D_aa)
+                    self.F_AO_b = diis_b.compute_F(self.F_AO_b, D_bb)
 
-                F = S_inv.T @ self.F_AO @ S_inv            # Orthogonalize fock
-                self.MO_energies, C_MO = np.linalg.eigh(F) # Diagonalize fock
-                self.C = (S_inv @ C_MO).real               # Back transform
+                F_a = S_inv.T @ self.F_AO_a @ S_inv              # Orthogonalize fock
+                F_b = S_inv.T @ self.F_AO_b @ S_inv              # Orthogonalize fock
+                self.MO_energies_a, C_MO_a = np.linalg.eigh(F_a) # Diagonalize fock
+                self.MO_energies_b, C_MO_b = np.linalg.eigh(F_b) # Diagonalize fock
+                self.C_a = (S_inv @ C_MO_a).real                 # Back transform
+                self.C_b = (S_inv @ C_MO_b).real                 # Back transform
 
                 # Compute new density
-                D = np.einsum("mk,nk->mn",self.C[:,:occ],self.C[:,:occ],optimize=True)
+                D_aa = self.C_a[:,:self.occ_a] @ self.C_a[:,:self.occ_a].T
+                D_bb = self.C_b[:,:self.occ_b] @ self.C_b[:,:self.occ_b].T
 
-                E_elec = np.trace(D @ (self.F_AO + H_core))
 
-                delta_E = E_elec + E_nuc - E_tot
-                E_tot = E_elec + E_nuc # Previous iteration's Etot above
+                E_elec  = np.trace(D_aa @ (self.F_AO_a + H_core))*.5
+                E_elec += np.trace(D_bb @ (self.F_AO_b + H_core))*.5
+
+                delta_E = E_elec + self.E_nuc - E_tot
+                E_tot = E_elec + self.E_nuc # Previous iteration's Etot above
 
                 progress.run(delta_E, E_tot, iteration, bar)
 
                 if self.plot:
-                    heatmap(graph, D, labels)
+                    heatmap(graph, K, labels)
+                    fig.colorbar
                     plt.pause(1)
 
-        E_HOMO = constants.au2ev * self.MO_energies[occ-1]
-        E_LUMO = constants.au2ev * self.MO_energies[occ]
+        E_HOMO = constants.au2ev * self.MO_energies_a[self.occ_a-1]
+        E_LUMO = constants.au2ev * self.MO_energies_a[self.occ_a]
         E_GAP  = abs(E_HOMO-E_LUMO)
         print("HOMO/LUMO: Δ(%.4f, %.4f) = %.4feV"%(E_HOMO, E_LUMO, E_GAP), end='')
         if (E_GAP > 1e-20):
             print("   %.2fnm"%(1239.8/E_GAP))
-        print("\nFinal RHF energy (Eh): %.9f"%E_tot)
+        
+        total_spin = np.sum(np.diag(D_aa) - np.diag(D_bb))
+        spin_exp = (self.mult-1)*(self.mult+1)/4
+        print("⟨S²⟩ = %.6f    Expecting %.6f"%(total_spin, spin_exp))
 
-        self.HOMO = self.C.T[occ-1]
-        self.LUMO = self.C.T[occ]
-        self.D = D
+        print("\nFinal UHF energy (Eh): %.9f"%E_tot)
+
+        self.HOMO = C_MO_a.T[self.occ_a-1]
+
+        self.D_aa = D_aa
+        self.D_bb = D_bb
         self.E_tot = E_tot
-        self.C_MO = C_MO
+        self.C_MO_a = C_MO_a
+        self.C_MO_b = C_MO_b
 
         if self.plot:
             input("Press enter to continue...")
-        return E_tot, self.C
+
+        return E_tot, self.C_a, self.C_b
 
     def occupied_orbitals(self):
         """Returns number of occupied oribitals"""
         Z_total = np.asarray([a[0] for a in self.molecule], int).sum()
         num_elec = Z_total - self.charge
         unpaired_elec = self.mult - 1
-        # n_elec + unpaired pairs all electrons to form whole MOs
-        if ((num_elec + unpaired_elec) % 2 != 0):
-            exit("Incompatible charge and multiplicity")
-        occ = (num_elec + unpaired_elec)//2
+        if (num_elec - unpaired_elec)%2 != 0:
+            exit("Invalid charge and multiplicity")
+        occ_b = (num_elec - unpaired_elec)//2
 
-        if (occ > self.nbf):
+        # unpaired e always go in a.
+        # a is larger
+        occ_a = occ_b + unpaired_elec
+
+        if (occ_a > self.nbf):
             exit("More occupied MOs than basis functions. This should never happen. Good luck.")
-        if (occ == self.nbf):
+        if (occ_a== self.nbf):
             exit("No LUMO orbital, choose a large basis set")
-        return occ
+        return occ_a, occ_b
 
     def write_molden(self, file):
         """Necessary to view MOs"""
@@ -218,9 +231,15 @@ class RHF(wfn.wavefunction):
             f.write("\n")
 
         f.write("[MO]\n")
-        occupations = 2*np.diag(self.D)
-        for e, occ, pii in zip(self.MO_energies, self.C_MO.T, occupations):
-            f.write(f" Sym= A\n Ene= {e}\n Spin= Alpha\n Occup= {pii}\n")
+        occupations = np.diag(self.D_aa)
+        for e, occ, pii in zip(self.MO_energies_a, self.C_MO_a.T, occupations):
+            f.write(f" Sym= A\n Ene= {e:.6f}\n Spin=Alpha\n Occup= {pii:.6f}\n")
             for ao_num, mo_coeff in enumerate(occ):
                 f.write(f"   {ao_num+1}  {mo_coeff}\n")
+        occupations = np.diag(self.D_bb)
+        for e, occ, pii in zip(self.MO_energies_b, self.C_MO_b.T, occupations):
+            f.write(f" Sym= B\n Ene= {e:.6f}\n Spin=Beta\n Occup={pii:.6f}\n")
+            for ao_num, mo_coeff in enumerate(occ):
+                f.write(f"   {ao_num+1}  {mo_coeff}\n")
+
 

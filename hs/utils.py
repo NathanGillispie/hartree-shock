@@ -12,18 +12,17 @@ import os.path as op
 def parse_gbs(f: str):
     """Uses gbasis parser, but also allows input to be string.
     I had to copy code from gbasis to get this to work. Credits listed below."""
-    gbs_basis = ''
 
     if op.isfile(f):
         gbsio = open(f, 'r')
         f = gbsio.read()
         gbsio.close()
     else:
-        list_dir = os.listdir("tests/basis")
-        bases = [op.splitext(os.path.basename(a))[0] for a in list_dir]
+        basis_dir = op.join(op.dirname(op.abspath(__file__)),"tests/basis")
+        bases = [op.splitext(os.path.basename(a))[0] for a in os.listdir(basis_dir)]
         basis_map = {}
         for basis in bases:
-            basis_map[basis.lower()] = "tests/basis/"+basis+".gbs"
+            basis_map[basis.lower()] = op.join(basis_dir, basis)+".gbs"
 
         if f.lower() in basis_map.keys():
             filename = basis_map[f.lower()]
@@ -99,12 +98,19 @@ def parse_mol(f, atomic_units=True):
     """
     if op.isfile(f):
         mol_file = open(f, 'r')
-    elif op.isfile("tests/molecules/"+f+".xyz"):
-        mol_file = open("tests/molecules/"+f+".xyz")
     else:
-        print("File not found, trying to parse molecule directly from input.")
-        import io
-        mol_file = io.StringIO(f)
+        mol_dir = op.join(op.dirname(op.abspath(__file__)),"tests/molecules")
+        molecules = [op.splitext(op.basename(a))[0] for a in os.listdir(mol_dir)]
+        mol_map = {}
+        for mol in molecules:
+            mol_map[mol.lower()] = op.join(mol_dir, mol) + ".xyz"
+
+        if f.lower() in mol_map.keys():
+            mol_file = open(mol_map[f.lower()], 'r')
+        else:
+            print("File not found, trying to parse molecule directly from input.")
+            import io
+            mol_file = io.StringIO(f)
 
     Z = []
     coords = []
@@ -161,48 +167,53 @@ class molecular_grid:
         self.spacing = spacing
         self.extension = extension
 
-        self.grid_points, self.eval_points = self.eval_basis_grid()
-
-    def eval_basis_grid(self):
-        """Produces the grid given a molecule, ao_basis, and transform"""
-        # Rotate the molecule, makes graphs look pretty
         Z, coords = zip(*self.wfn.molecule)
-        masses = np.asarray(Z, dtype=float)
+        self.atoms = [ELEMENTS[a] for a in Z]
 
+        coords = self.rotate_molecule(Z, coords)
+
+        max = np.amax(coords, axis=0)
+        min = np.amin(coords, axis=0)
+
+        self.shape = np.array(np.ceil((max - min + 2.0 * self.extension) / self.spacing), int)
+        self._origin = np.dot((-0.5 * self.shape), self._axes)
+
+        max = self._origin + self.spacing*self.shape
+        min = self._origin
+
+        X = np.linspace(min[0], max[0], num=self.shape[0], endpoint=False)
+        Y = np.linspace(min[1], max[1], num=self.shape[1], endpoint=False)
+        Z = np.linspace(min[2], max[2], num=self.shape[2], endpoint=False)
+        self.X, self.Y, self.Z = np.meshgrid(X,Y,Z,indexing="ij")
+
+        self.grid_points = np.vstack((self.X, self.Y, self.Z)).reshape(3, -1).T
+        self.coords = coords
+
+    def rotate_molecule(self, Z, coords):
+        """
+        Rotates the molecule so the axes of greatest angular momentum
+        (based on Z) are aligned with the XYZ planes. Makes plots look pretty.
+        """
+        masses = np.asarray(Z, dtype=float)
         inertia = np.zeros([3,3])
         for i in range(masses.shape[0]):
             pos = coords[i]
             r = pos[0]**2 + pos[1]**2 + pos[2]**2
             inertia += masses[i] * (np.diag([r,r,r]) - np.outer(pos.T, pos))
         _, vecs = np.linalg.eigh(inertia)
-        new_coords = np.dot(coords, vecs)
+        coords = np.dot(coords, vecs)
         axes = self.spacing * vecs
         self._axes = axes
+        return coords
 
-        max = np.amax(new_coords, axis=0)
-        min = np.amin(new_coords, axis=0)
-
-        self.shape = np.array(np.ceil((max - min + 2.0 * self.extension) / self.spacing), int)
-        self._origin = np.dot((-0.5 * self.shape), axes)
-
-        min = self._origin
-        max = self._origin + self.spacing*self.shape
-
-        self.X = np.linspace(min[0], max[0], num=self.shape[0], endpoint=False)
-        self.Y = np.linspace(min[1], max[1], num=self.shape[1], endpoint=False)
-        self.Z = np.linspace(min[2], max[2], num=self.shape[2], endpoint=False)
-
-        grid_points = np.vstack(np.meshgrid(self.X,self.Y,self.Z,indexing="ij")).reshape(3, -1).T
-
-        atoms = [ELEMENTS[a] for a in Z]
-        contractions = gbasis.parsers.make_contractions(self.wfn.basis, atoms, new_coords, coord_types="cartesian")
-        eval_points = evaluate_basis(contractions, grid_points, transform=self.transform)
-
-        # grid_points = grid_points.reshape((*self.shape,3))
-        # nbf = eval_points.shape[0]
-        # eval_points = eval_points.reshape((nbf,*self.shape))
-
-        return grid_points, eval_points
+    def eval_basis_grid(self):
+        """
+        Produces the grid of all evaluations of each basis function.
+        Returns the grid points in a list and the corresponding points.
+        """
+        contractions = gbasis.parsers.make_contractions(self.wfn.basis, self.atoms, self.coords, coord_types="cartesian")
+        eval_points = evaluate_basis(contractions, self.grid_points, transform=self.transform)
+        return self.grid_points, eval_points
 
     def grid_eval_x(self, occ):
         r"""Return the grid and points closest to the YZ-plane"""
@@ -247,9 +258,6 @@ class molecular_grid:
                 row_data = data.flat[i : i + num_chunks]
                 f.write((row_data.size * " {:12.5E}").format(*row_data))
                 f.write("\n")
-
-    def get_grid_eval(self):
-        return self.grid_points, self.eval_points
 
 def np2mathematica(arr):
     """Places numpy array in Windows clipboard in mathematica format"""

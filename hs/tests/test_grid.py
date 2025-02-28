@@ -16,14 +16,14 @@ def do_wfn():
 def do_grid(do_wfn):
     wfn = do_wfn
     grid = molecular_grid(wfn, spacing=1, extension=1)
-    return grid.get_grid_eval()
+    return grid.eval_basis_grid()
 
 def test_molden(do_wfn):
     wfn = do_wfn
     import io
     file = io.StringIO("")
     wfn.write_molden(file)
-
+ 
 def test_occ(do_wfn):
     assert do_wfn.occupied_orbitals() == 5
 
