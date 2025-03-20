@@ -1,11 +1,17 @@
 # ⚠️🤯 ⚡⚡⚡Hartree-Shock ⚡⚡⚡🤯⚠️
-▞▞▞▞▞▞▞▞▞▞▞▞▞▞
 
 Simple Hartree-Fock program to compute my molecular orbitals for me. Final project for programming in chem class.
 
-The `hs` dir contains my final project. Test it by running `pytest` the root dir.
+The `hs` dir contains my final project. Test it by running `pytest` the root dir. It should be used as a module.
 
-I'm still kinda caught between using this as a module and as a script with `./hf.py`. Bear with me while I transition to making this just a module.
+**Dependencies**:
+ - numpy
+ - matplotlib
+ - alive-progress
+ - pytest
+ - gbasis (uses libcint)
+
+[Gbasis](https://github.com/theochem/gbasis) is a super helpful project that computes the integrals using `libcint`. You may need to compile it before ruinning. See the [installation instructions](https://gbasis.qcdevs.org/installation.html) for more info.
 
 ## Capabilities
 
@@ -16,7 +22,7 @@ I'm still kinda caught between using this as a module and as a script with `./hf
  - libcint ints OR python ints via gbasis
  - DIIS for faster convergence
  - Cool SCF progress bar, wow!
- - The progress bar is actually cool though, like I even put in an ETA for the SCF procedure I mean who does that right isn't that the coolest thing you've ever seen? It also has these bolt emoji too and it's super low latency just trust me please.
+ - ETA for the SCF procedure 😎
 
 ## Options
 

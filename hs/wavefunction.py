@@ -6,7 +6,7 @@ import numpy as np
 from math import log10
 from alive_progress import alive_bar
 
-import ints
+from hs import ints
 
 class wavefunction:
     """Base class"""

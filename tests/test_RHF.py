@@ -26,8 +26,6 @@ def acetaldehyde():
     wfn = RHF(*build_molecule(molecule, "sto-3g"))
     return wfn
 
-# Yeah I have no clue why this isn't working
-@pytest.mark.xfail
 def test_no_DIIS(acetaldehyde):
     """Acetaldehyde fails without DIIS"""
     with pytest.raises(SCFConvergeError):

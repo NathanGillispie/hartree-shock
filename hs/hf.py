@@ -20,12 +20,10 @@ __author__ = "Nathan Gillispie"
 import pickle
 import numpy as np
 
-from utils import parse_mol, parse_gbs, molecular_grid, np2mathematica
-import constants
-from rhf import RHF
-from uhf import UHF
-
-import plotly.graph_objects as go
+from hs.utils import parse_mol, parse_gbs, molecular_grid, np2mathematica
+from hs import constants
+from hs.rhf import RHF
+from hs.uhf import UHF
 
 def build_molecule(mol_file, basis_file, **kwargs):
     r"""Initialize within a module. Returns tuple of molecule and basis. 
@@ -98,8 +96,11 @@ def get_wfn(result):
 
     return wfn_rhf
 
-if __name__ == "__main__":
-    wfn = get_wfn(parse())
+def plot_density(wfn):
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        exit("You must install plotly to plot the density")
 
     wfn.write_molden("h2o_rhf.molden")
 
@@ -128,4 +129,8 @@ if __name__ == "__main__":
         surface_count=12
     ))
     fig.show()
+
+if __name__ == "__main__":
+    wfn = get_wfn(parse())
+
 

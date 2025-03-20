@@ -5,11 +5,10 @@ from math import log10
 # Alternate eigenvalue computer
 # from scipy.linalg import eigh
 
-import wavefunction as wfn
-from utils import SCFConvergeError
-import constants
-
-from diis import DIIS
+from hs import wavefunction as wfn
+from hs import constants
+from hs.utils import SCFConvergeError
+from hs.diis import DIIS
 
 import matplotlib as mpl
 

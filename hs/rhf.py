@@ -5,11 +5,10 @@ from math import log10
 # Alternate eigenvalue computer
 # from scipy.linalg import eigh
 
-import wavefunction as wfn
-from utils import SCFConvergeError
-import constants
+from hs import constants, wavefunction
+from hs.utils import SCFConvergeError
 
-from diis import DIIS
+from hs.diis import DIIS
 
 def parr(A):
     print(np.array2string(A, max_line_width=200, precision=3))
@@ -37,8 +36,8 @@ def heatmap(graph, D, labels):
 
 def make_labels(wfn):
     from gbasis.parsers import make_contractions
-    basis = wfn.basis
-    Z, coords = zip(*wfn.molecule)
+    basis = wavefunction.basis
+    Z, coords = zip(*wavefunction.molecule)
     atoms = [constants.Z_to_element[a] for a in Z]
     shells = make_contractions(basis, atoms, np.asarray(coords), coord_types="cartesian")
 
@@ -57,7 +56,7 @@ def make_labels(wfn):
 
     return labels
 
-class RHF(wfn.wavefunction):
+class RHF(wavefunction.wavefunction):
     """RHF class, instantiated with molecule, basis and optionally\
     charge and multiplicity."""
 
@@ -110,7 +109,7 @@ class RHF(wfn.wavefunction):
 
         delta_E = 1
         iteration = 0
-        progress = wfn.SCF_progress(self)
+        progress = wavefunction.SCF_progress(self)
 
         if (use_diis):
             diis = DIIS(self, keep=8)

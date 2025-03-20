@@ -1,11 +1,8 @@
 __version__ = '0.1'
 __author__  = 'Nathan Gillispie'
 
-import os
-import sys
-base = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(base)
+__all__ = ['hf', 'rhf', 'uhf', 'utils']
 
-from hf import build_molecule
-from utils import *
-from rhf import RHF
+from hs.hf import build_molecule
+from hs.utils import *
+from hs.rhf import RHF
