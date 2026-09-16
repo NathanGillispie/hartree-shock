@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hartree-shock"
+version = "0.1.0"
+description = "A simple Hartree-Fock program for computing molecular orbitals."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "Nathan Gillispie" },
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "alive-progress",
+    # gbasis is published from this repository as qc-gbasis and provides the
+    # gbasis import package used by Hartree-Shock.
+    "qc-gbasis @ git+https://github.com/theochem/gbasis.git",
+]
+
+[project.optional-dependencies]
+plot = [
+    "plotly",
+]
+test = [
+    "pytest",
+]
+all = [
+    "plotly",
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+include = ["hs*"]
+
+[tool.setuptools.package-data]
+hs = [
+    "basis/*.gbs",
+    "molecules/*.xyz",
+]
