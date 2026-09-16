@@ -50,24 +50,24 @@ class integrals:
 
     def overlap(self):
         if self.use_libcint:
-            return self.lc_basis.overlap_integral()
+            return self.lc_basis.overlap()
         else:
             return overlap_integral(self.shells)
     def kinetic_energy(self):
         if self.use_libcint:
-            return self.lc_basis.kinetic_energy_integral()
+            return self.lc_basis.kinetic_energy()
         else:
             kinetic = KineticEnergyIntegral(self.shells)
             return kinetic.construct_array_cartesian()
     def nuclear_attraction(self):
         if self.use_libcint:
-            return self.lc_basis.nuclear_attraction_integral()
+            return self.lc_basis.nuclear_attraction()
         else:
             return nuc_attr.nuclear_electron_attraction_integral(
                     self.shells, self.nuclear_coords, self.nuclear_charges)
     def electron_repulsion(self):
         if self.use_libcint:
-            return self.lc_basis.electron_repulsion_integral(notation="chemist")
+            return self.lc_basis.electron_repulsion(notation="chemist")
         else:
             eri = ElectronRepulsionIntegral(self.shells)
             return eri.construct_array_cartesian()
